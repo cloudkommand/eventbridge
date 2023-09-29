@@ -188,6 +188,7 @@
                               "arn": "@my_queue:props.arn"
                             }
                           }
+		    	}
                     }
                 }
             ]
