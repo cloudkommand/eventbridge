@@ -177,7 +177,17 @@
                     "displayname": "EventBridge Rule Triggering Queue on select S3 Object Actions",
                     "notes": "A Rule that targets an SQS Queue on select S3 Object Actions",
                     "definition": {
-                        "type": "&eventbridge.rule"
+                        "type": "&eventbridge.rule",
+                        "event_pattern": {
+                            "source": ["aws.s3"],
+                            "detail-type": ["Object Created", "Object Deleted","Object Tags Added"],
+                            "detail": { "bucket": { "name": [ "YOUR_BUCKET_NAME" ] } }
+                          },
+                          "targets": {
+                            "my_queue": {
+                              "arn": "@my_queue:props.arn"
+                            }
+                          }
                     }
                 }
             ]
