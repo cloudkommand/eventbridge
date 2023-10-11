@@ -185,7 +185,7 @@
                           },
                           "targets": {
                             "my_queue": {
-                              "arn": "@my_queue:props.arn"
+                              "arn": "&my_queue:props.arn"
                             }
                           }
 			}
