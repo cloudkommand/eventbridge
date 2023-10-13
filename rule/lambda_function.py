@@ -150,6 +150,7 @@ def lambda_handler(event, context):
         get_rule(attributes, region, prev_state)
 
         ### DELETE CALL(S)
+        remove_targets()
         delete_rule()
 
         ### CREATE CALL(S) (occasionally multiple)
@@ -160,7 +161,6 @@ def lambda_handler(event, context):
         update_rule(attributes, region, prev_state)
         remove_tags()
         set_tags()
-        remove_targets()
         put_targets()
 
         add_permissions_for_targets()
