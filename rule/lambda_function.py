@@ -150,7 +150,7 @@ def lambda_handler(event, context):
         get_rule(attributes, region, prev_state)
 
         ### DELETE CALL(S)
-        remove_targets(op)
+        remove_targets(event.get("op"))
         delete_rule()
 
         ### CREATE CALL(S) (occasionally multiple)
