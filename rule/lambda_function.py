@@ -135,7 +135,7 @@ def lambda_handler(event, context):
         elif event.get("op") == "delete":
             eh.add_op("remove_targets")
             eh.add_op("delete_rule")
-            eh.add_state({"name": prev_state["props"]["name"]})
+            eh.add_state({"name": prev_state["props"]["name"], "event_bus_name": prev_state["props"]["event_bus_name"]})
 
         # The ordering of call declarations should generally be in the following order
         # GET STATE
