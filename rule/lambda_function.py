@@ -150,7 +150,7 @@ def lambda_handler(event, context):
         get_rule(attributes, region, prev_state)
 
         ### DELETE CALL(S)
-        remove_targets()
+        remove_targets(op)
         delete_rule()
 
         ### CREATE CALL(S) (occasionally multiple)
@@ -540,11 +540,35 @@ def put_targets():
 
 
 @ext(handler=eh, op="remove_targets")
-def remove_targets():
+def remove_targets(op):
     remove_targets = eh.ops.get('remove_targets')
+
     rule_name= eh.state["name"]
     event_bus_name= eh.state["event_bus_name"]
+    
+    if not remove_targets and op == "delete": 
+       # Get targets
+        try:
+            # Try to get the current targets
+            response = client.list_targets_by_rule(Rule=rule_name)
+            eh.add_log("Got Targets", response)
+            relevant_targets = response.get("Targets", [])
 
+            remove_targets = [target.get("Id") for target in relevant_targets ]
+
+        # If the rule does not exist, maybe everything is already deleted
+        except client.exceptions.ResourceNotFoundException:
+            eh.add_log("Rule Not Found", {"name": rule_name})
+        except client.exceptions.InternalException as e:
+            eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+            eh.retry_error("AWS Internal Error -- Retrying", 25)
+        except ClientError as e:
+            eh.add_log(f"Error getting rule targets", {"error": str(e)}, is_error=True)
+
+    if not remove_targets:
+        eh.add_log("No Targets to Remove", remove_targets)
+        return 0
+    
     try:
         response = client.remove_targets(
             Rule=rule_name,
