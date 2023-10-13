@@ -133,6 +133,7 @@ def lambda_handler(event, context):
         # If NOT retrying, and we are instead deleting, then we start with the DELETE call 
         #   (sometimes you start with GET STATE if you need to make a call for the identifier)
         elif event.get("op") == "delete":
+            eh.add_op("remove_targets")
             eh.add_op("delete_rule")
             eh.add_state({"name": prev_state["props"]["name"]})
 
