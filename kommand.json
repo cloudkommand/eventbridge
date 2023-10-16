@@ -48,17 +48,16 @@
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "A unique name to identify the rule.",
-                        "common": true
+                        "description": "A unique name to identify the rule. Will be auto-generated if not specified"
                     },
                     "schedule_expression": {
                         "type": "string",
-                        "description": "The scheduling expression. For example, “cron(0 20 * * ? *)” or “rate(5 minutes). Specify either schedule_expression or event_pattern, not both.",
+                        "description": "The scheduling expression. For example, “cron(0 20 * * ? *)” or “rate(5 minutes). Must specify either schedule_expression or event_pattern, not both.",
                         "common": true
                     },
                     "event_pattern": {
                         "type": "object",
-                        "description": "The event pattern. For more information, see https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html. Specify either schedule_expression or event_pattern, not both.",
+                        "description": "The event pattern. For more information, see https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-event-patterns.html. Must specify either schedule_expression or event_pattern, not both.",
                         "common": true
                     },
                     "targets": {
@@ -182,14 +181,14 @@
                             "source": ["aws.s3"],
                             "detail-type": ["Object Created", "Object Deleted","Object Tags Added"],
                             "detail": { "bucket": { "name": [ "YOUR_BUCKET_NAME" ] } }
-                          },
-                          "targets": {
+                        },
+                        "targets": {
                             "my_queue": {
-                              "arn": "&my_queue:props.arn"
+                                "arn": "&my_queue:props.arn"
                             }
-                          }
-			}
-	    	}
+                        }
+			        }
+	    	    }
             ]
         }
     }

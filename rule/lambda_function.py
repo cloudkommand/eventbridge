@@ -72,15 +72,7 @@ def lambda_handler(event, context):
         cdef = event.get("component_def")
         cname = event.get("component_name")
 
-        # you pull in whatever arguments you care about
-        """
-        # Some examples. S3 doesn't really need any because each attribute is a separate call. 
-        auto_verified_attributes = cdef.get("auto_verified_attributes") or ["email"]
-        alias_attributes = cdef.get("alias_attributes") or ["preferred_username", "phone_number", "email"]
-        username_attributes = cdef.get("username_attributes") or None
-        """
-
-        name = prev_state.get("props", {}).get("name") or cdef.get("name") or component_safe_name(project_code, repo_id, cname, no_underscores=False, no_uppercase=False, max_chars=63)
+        name = cdef.get("name") or component_safe_name(project_code, repo_id, cname, no_underscores=False, no_uppercase=False, max_chars=63)
         eh.add_state({"name": name})
 
         ### ATTRIBUTES THAT CAN BE SET ON INITIAL CREATION
@@ -113,13 +105,7 @@ def lambda_handler(event, context):
         # If NOT retrying, and we are instead upserting, then we start with the GET STATE call
         elif event.get("op") == "upsert":
 
-            old_name = None
-
-            try:
-                old_name = prev_state["props"]["name"]
-            except:
-                pass
-
+            old_name = prev_state.get("props", {}).get("name")
             eh.add_op("get_rule")
 
             # If any non-editable fields have changed, we are choosing to fail. 
@@ -193,6 +179,7 @@ def get_rule(attributes, region, prev_state):
     
     existing_rule_name = prev_state.get("props", {}).get("name")
 
+    # Future, allow it to pick up an existing eventbridge rule by name
     if existing_rule_name:
         # Try to get the rule. If you succeed, record the props and links from the current rule
         try:
@@ -316,13 +303,12 @@ def get_rule(attributes, region, prev_state):
                 eh.add_log("Rule Does Not Exist", {"name": existing_rule_name})
                 eh.add_op("create_rule")
                 return 0
-        # If there is no cache policy and there is an exception handle it here
         except client.exceptions.ResourceNotFoundException:
             eh.add_log("Rule Does Not Exist", {"name": existing_rule_name})
             eh.add_op("create_rule")
             return 0
         except client.exceptions.InternalException: # I believe this should not happen unless the plugin has insufficient permissions
-            eh.add_log("AWS had an internal error. Working on handling this regardless.", {"name": existing_rule_name})
+            eh.add_log("AWS Internal Error -- Retrying", {"name": existing_rule_name}, True)
             eh.add_op("create_rule")
             return 0
         except ClientError as e:
@@ -369,14 +355,14 @@ def create_rule(attributes, region, prev_state):
         eh.add_log(f"AWS Quota for EventBridge Rules reached. Please increase your quota and try again.", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 20)
     except client.exceptions.ConcurrentModificationException as e:
-        eh.add_log(f"Concurrent modification of this Rule. Retrying.", {"error": str(e)}, is_error=True)
-        eh.retry_error("Concurrent modification of Rule", 20)
+        eh.add_log(f"Concurrent Modification of this Rule. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error(str(e), 20)
     except client.exceptions.ManagedRuleException as e:
         eh.add_log(f"This rule was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 20)
     except client.exceptions.InternalException as e:
-        eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
-        eh.retry_error("AWS Internal Error -- Retrying", 20)
+        eh.add_log("AWS Internal Error -- Retrying", {"error": str(e)}, is_error=True)
+        eh.retry_error(str(e), 20)
     except client.exceptions.ResourceNotFoundException as e:
         eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 20)
@@ -421,13 +407,13 @@ def update_rule(attributes, region, prev_state):
         eh.perm_error(str(e), 20)
     except client.exceptions.ConcurrentModificationException as e:
         eh.add_log(f"Concurrent modification of this Rule. Retrying.", {"error": str(e)}, is_error=True)
-        eh.retry_error("Concurrent modification of Rule", 20)
+        eh.retry_error(str(e), 20)
     except client.exceptions.ManagedRuleException as e:
         eh.add_log(f"This rule was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 20)
     except client.exceptions.InternalException as e:
-        eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
-        eh.retry_error("AWS Internal Error -- Retrying", 20)
+        eh.add_log("AWS Internal Error -- Retrying", {"error": str(e)}, is_error=True)
+        eh.retry_error(str(e), 20)
     except client.exceptions.ResourceNotFoundException as e:
         eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
         eh.perm_error(str(e), 20)
@@ -510,12 +496,13 @@ def put_targets():
             retry_codes = ["ResourceNotFoundException", "InternalException", "ConcurrentModificationException", "LimitExceededException"]
             if all([item.get("ErrorCode") not in retry_codes for item in failed_entries]):
                 for item in failed_entries:
-                    eh.add_log(f"The target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
-                eh.perm_error(str(e), 80)
+                    eh.add_log("Invalid Target - AWS Managed - Cannot Edit", {"error": item}, is_error=True)
+                eh.perm_error(f"The target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", 80)
             else:
                 for item in failed_entries:
-                    eh.add_log(f"The target {item.get('TargetId')} was not added to the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"error": str(e)}, is_error=True)
+                    eh.add_log(f"Retrying Target: {item.get('ErrorCode')}", {"error": item}, is_error=True)
                 eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
+            return
 
         eh.add_log("Put Targets", put_targets)
         eh.add_op("add_permissions_for_targets", put_targets)
