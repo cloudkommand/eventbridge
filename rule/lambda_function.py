@@ -119,7 +119,7 @@ def lambda_handler(event, context):
         # If NOT retrying, and we are instead deleting, then we start with the DELETE call 
         #   (sometimes you start with GET STATE if you need to make a call for the identifier)
         elif event.get("op") == "delete":
-            eh.add_op("remove_targets")
+            eh.add_op("remove_targets_delete")
             eh.add_op("delete_rule")
             eh.add_state({"name": prev_state["props"]["name"], "event_bus_name": prev_state["props"]["event_bus_name"]})
 
@@ -137,7 +137,8 @@ def lambda_handler(event, context):
         get_rule(attributes, region, prev_state)
 
         ### DELETE CALL(S)
-        remove_targets(event.get("op"))
+        remove_targets_update()
+        remove_targets_delete()
         delete_rule()
 
         ### CREATE CALL(S) (occasionally multiple)
@@ -259,7 +260,7 @@ def get_rule(attributes, region, prev_state):
 
                     remove_targets = [target.get("Id") for target in relevant_targets if target.get("Id") not in attributes.get("Targets")]
                     if remove_targets:
-                        eh.add_op("remove_targets", remove_targets)
+                        eh.add_op("remove_targets_update", remove_targets)
                     
                     put_targets = [{**attributes.get("Targets").get(target), "id": target} for target in attributes.get("Targets") if target not in remove_targets]
                     formatted_put_targets = []
@@ -527,14 +528,69 @@ def put_targets():
         handle_common_errors(e, eh, "Error Updating Rule Targets", progress=80)
 
 
-@ext(handler=eh, op="remove_targets")
-def remove_targets(op):
+@ext(handler=eh, op="remove_targets_update")
+def remove_targets_update():
+    remove_targets = eh.ops.get('remove_targets')
+
+    rule_name= eh.state["name"]
+    event_bus_name= eh.state["event_bus_name"]
+
+    if not remove_targets:
+        eh.add_log("No Targets to Remove", remove_targets)
+        return 0
+    
+    try:
+        response = client.remove_targets(
+            Rule=rule_name,
+            EventBusName=event_bus_name,
+            Ids=remove_targets,
+            Force=False
+        )
+        print(response)
+        if response.get("FailedEntryCount") > 0:
+            failed_entries = response.get("FailedEntries")
+            retry_codes = ["InternalException", "ConcurrentModificationException"]
+            if all([item.get("ErrorCode") == "ResourceNotFoundException" for item in failed_entries]):
+                eh.add_log(f"Rule/Event Bus combination Not Found. Targets Already Deleted.", {"error": str(e)}, is_error=True)
+                return 0
+            elif all([item.get("ErrorCode") == "ManagedRuleException" for item in failed_entries]):
+                for item in failed_entries:
+                    eh.add_log(f"The rule {rule_name} specified for the target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+                eh.perm_error(str(e), 80)
+            else:
+                for item in failed_entries:
+                    eh.add_log(f"The target {item.get('TargetId')} was not removed from the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"error": str(e)}, is_error=True)
+                eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
+
+        eh.add_log("Removed Targets", remove_targets)
+
+
+    except client.exceptions.ConcurrentModificationException as e:
+        eh.add_log(f"Concurrent modification of the Target. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("Concurrent modification of Target", 80)
+    except client.exceptions.ManagedRuleException as e:
+        eh.add_log(f"This rule was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except client.exceptions.InternalException as e:
+        eh.add_log(f"AWS had an internal error. Retrying.", {"error": str(e)}, is_error=True)
+        eh.retry_error("AWS Internal Error -- Retrying", 80)
+    except client.exceptions.LimitExceededException as e:
+        eh.add_log(f"AWS Quota for EventBridge Rules/Targets reached. Please increase your quota and try again.", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except client.exceptions.ResourceNotFoundException as e:
+        eh.add_log(f"Rule Not Found", {"error": str(e)}, is_error=True)
+        eh.perm_error(str(e), 80)
+    except ClientError as e:
+        handle_common_errors(e, eh, "Error Updating Rule Targets", progress=80)
+
+@ext(handler=eh, op="remove_targets_delete")
+def remove_targets_delete():
     remove_targets = eh.ops.get('remove_targets')
 
     rule_name= eh.state["name"]
     event_bus_name= eh.state["event_bus_name"]
     
-    if not remove_targets and op == "delete": 
+    if not remove_targets: 
        # Get targets
         try:
             # Try to get the current targets
