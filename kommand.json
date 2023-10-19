@@ -35,10 +35,14 @@
                         "lambda:GetFunction",
                         "lambda:InvokeFunction",
                         "sns:GetTopicAttributes",
-				        "sns:SetTopicAttributes",
+			"sns:SetTopicAttributes",
                         "sqs:GetQueueUrl",
                         "sqs:GetQueueAttributes",
-                        "sqs:SetQueueAttributes"
+                        "sqs:SetQueueAttributes",
+			"dynamodb:DescribeStream",
+	                "dynamodb:GetRecords",
+	                "dynamodb:GetShardIterator",
+	                "dynamodb:ListStreams"
                     ],
                     "Resource": "*"
                 }]
