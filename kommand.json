@@ -38,14 +38,21 @@
 			"sns:SetTopicAttributes",
                         "sqs:GetQueueUrl",
                         "sqs:GetQueueAttributes",
-                        "sqs:SetQueueAttributes",
-			"dynamodb:DescribeStream",
-	                "dynamodb:GetRecords",
-	                "dynamodb:GetShardIterator",
-	                "dynamodb:ListStreams"
+                        "sqs:SetQueueAttributes"
                     ],
                     "Resource": "*"
-                }]
+                },
+		{
+		    "Sid": "ConnectToDynamoDBStreams",
+		    "Effect": "Allow",
+		    "Action": [
+			"dynamodb:DescribeStream",
+			"dynamodb:GetRecords",
+			"dynamodb:GetShardIterator",
+			"dynamodb:ListStreams"
+		    ],
+		    "Resource": "arn:aws:dynamodb:::table/*/stream/*"
+		}]
             },
             "input": {
                 "type": "object",
