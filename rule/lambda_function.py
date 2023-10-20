@@ -263,28 +263,7 @@ def get_rule(attributes, region, prev_state):
                         eh.add_op("remove_targets_update", remove_targets)
                     
                     put_targets = [{**attributes.get("Targets").get(target), "id": target} for target in attributes.get("Targets") if target not in remove_targets]
-                    formatted_put_targets = []
-                    for item in put_targets:
-                        formatted_target = remove_none_attributes({
-                            'Id': item.get("id"),
-                            'Arn': item.get("arn"),
-                            'RoleArn': item.get("role_arn"),
-                            'Input': item.get("input"),
-                            'InputPath': item.get("input_path"),
-                            'HttpParameters': remove_none_attributes({
-                                'PathParameterValues': item.get("http_path_parameter_values") if item.get("http_path_parameter_values") else None,
-                                'HeaderParameters': item.get("http_header_parameters") if item.get("http_header_parameters") else None,
-                                'QueryStringParameters': item.get("http_query_string_parameters") if item.get("http_query_string_parameters") else None
-                            }) if any( http_key in item for http_key in ["http_path_parameter_values", "http_header_parameters", "http_query_string_parameters"]) else None,
-                            'DeadLetterConfig': {
-                                'Arn': item.get("dead_letter_queue_arn")
-                            } if item.get("dead_letter_queue_arn") else None,
-                            'RetryPolicy': remove_none_attributes({
-                                'MaximumRetryAttempts': item.get("maximum_retry_attempts"),
-                                'MaximumEventAgeInSeconds': item.get("maximum_event_age_in_seconds")
-                            }) if any( retry_key in item for retry_key in ["maximum_retry_attempts", "maximum_event_age_in_seconds"]) else None,
-                        })
-                        formatted_put_targets.append(formatted_target)
+                    formatted_put_targets = gen_formatted_targets(put_targets)
 
                     if formatted_put_targets:
                         eh.add_op("put_targets", formatted_put_targets)
@@ -344,6 +323,10 @@ def create_rule(attributes, region, prev_state):
         }
         eh.add_props(props_to_add)
         eh.add_links({"Rule": gen_rule_link(region, rule_name=rule_name, event_bus_name=rule_event_bus_name)})
+        if attributes.get("Targets"):
+            put_targets = [{**attributes.get("Targets").get(target), "id": target} for target in attributes.get("Targets")]
+            formatted_put_targets = gen_formatted_targets(put_targets)
+            eh.add_op("put_targets", formatted_put_targets)
 
         ### Once the rule exists, then setup any followup tasks
 
@@ -859,3 +842,29 @@ def analyze_type_of_arn(arn):
         return "sqs"
     else:
         return "not_supported_or_unnecessary"
+
+def gen_formatted_targets(targets):
+    formatted_put_targets = []
+    for item in targets:
+        formatted_target = remove_none_attributes({
+            'Id': item.get("id"),
+            'Arn': item.get("arn"),
+            'RoleArn': item.get("role_arn"),
+            'Input': item.get("input"),
+            'InputPath': item.get("input_path"),
+            'HttpParameters': remove_none_attributes({
+                'PathParameterValues': item.get("http_path_parameter_values") if item.get("http_path_parameter_values") else None,
+                'HeaderParameters': item.get("http_header_parameters") if item.get("http_header_parameters") else None,
+                'QueryStringParameters': item.get("http_query_string_parameters") if item.get("http_query_string_parameters") else None
+            }) if any( http_key in item for http_key in ["http_path_parameter_values", "http_header_parameters", "http_query_string_parameters"]) else None,
+            'DeadLetterConfig': {
+                'Arn': item.get("dead_letter_queue_arn")
+            } if item.get("dead_letter_queue_arn") else None,
+            'RetryPolicy': remove_none_attributes({
+                'MaximumRetryAttempts': item.get("maximum_retry_attempts"),
+                'MaximumEventAgeInSeconds': item.get("maximum_event_age_in_seconds")
+            }) if any( retry_key in item for retry_key in ["maximum_retry_attempts", "maximum_event_age_in_seconds"]) else None,
+        })
+        formatted_put_targets.append(formatted_target)
+
+    return formatted_put_targets
