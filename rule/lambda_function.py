@@ -534,15 +534,15 @@ def remove_targets_update():
             failed_entries = response.get("FailedEntries")
             retry_codes = ["InternalException", "ConcurrentModificationException"]
             if all([item.get("ErrorCode") == "ResourceNotFoundException" for item in failed_entries]):
-                eh.add_log(f"Rule/Event Bus combination Not Found. Targets Already Deleted.", {"error": str(e)}, is_error=True)
+                eh.add_log(f"Rule/Event Bus combination Not Found. Targets Already Deleted.", {"failed_entries": failed_entries}, is_error=True)
                 return 0
             elif all([item.get("ErrorCode") == "ManagedRuleException" for item in failed_entries]):
-                for item in failed_entries:
-                    eh.add_log(f"The rule {rule_name} specified for the target {item.get('TargetId')} was created by an AWS service on behalf of your account. It is managed by that service and editing it is restricted.", {"error": str(e)}, is_error=True)
-                eh.perm_error(str(e), 80)
+                # for item in failed_entries:
+                eh.add_log(f"Cannot Modify AWS Managed Rule", {"failed_entries": failed_entries}, is_error=True)
+                eh.perm_error("; ".join(failed_entries), 80)
             else:
                 for item in failed_entries:
-                    eh.add_log(f"The target {item.get('TargetId')} was not removed from the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"error": str(e)}, is_error=True)
+                    eh.add_log(f"The target {item.get('TargetId')} was not removed from the rule due to error code {item.get('ErrorCode')} and error message {item.get('ErrorMessage')}. Retrying.", {"failed_entry": item}, is_error=True)
                 eh.retry_error(f"Retrying Errors: {', '.join([item.get('ErrorCode') for item in failed_entries])}", 80)
 
         eh.add_log("Removed Targets", remove_targets)
