@@ -177,6 +177,11 @@
                     "definition": {
                         "type": "&eventbridge.rule",
                         "schedule_expression": "rate(5 minutes)",
+			"targets": {
+			    "my_lambda": {
+				"arn": "&my_lambda:props_arn"
+			    }
+			},
                         "tags": {
                             "tag1": "v1",
                             "tag2": "v2.3"
