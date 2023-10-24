@@ -114,6 +114,7 @@ def lambda_handler(event, context):
                 eh.add_state({"name": prev_state["props"]["name"], "event_bus_name": prev_state["props"]["event_bus_name"]})
                 eh.add_op("remove_targets_delete")
                 eh.add_op("delete_rule")
+                eh.add_log("Rule will be removed and recreated.")
 
                 # non_editable_error_message = "You may not edit the name of the existing rule. Please create a new component with the desired name."
                 # eh.add_log("Cannot edit non-editable field", {"error": non_editable_error_message}, is_error=True)
