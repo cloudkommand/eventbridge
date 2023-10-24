@@ -108,13 +108,16 @@ def lambda_handler(event, context):
             old_name = prev_state.get("props", {}).get("name")
             eh.add_op("get_rule")
 
-            # If any non-editable fields have changed, we are choosing to fail. 
-            # We are NOT choosing to delete and recreate the rule
+            # If any non-editable fields have changed, we are choosing to delete and recreate the rule.
             if (old_name and old_name != name):
+                
+                eh.add_state({"name": prev_state["props"]["name"], "event_bus_name": prev_state["props"]["event_bus_name"]})
+                eh.add_op("remove_targets_delete")
+                eh.add_op("delete_rule")
 
-                non_editable_error_message = "You may not edit the name of the existing rule. Please create a new component with the desired name."
-                eh.add_log("Cannot edit non-editable field", {"error": non_editable_error_message}, is_error=True)
-                eh.perm_error(non_editable_error_message, 10)
+                # non_editable_error_message = "You may not edit the name of the existing rule. Please create a new component with the desired name."
+                # eh.add_log("Cannot edit non-editable field", {"error": non_editable_error_message}, is_error=True)
+                # eh.perm_error(non_editable_error_message, 10)
 
         # If NOT retrying, and we are instead deleting, then we start with the DELETE call 
         #   (sometimes you start with GET STATE if you need to make a call for the identifier)
@@ -133,13 +136,13 @@ def lambda_handler(event, context):
         ### The section below DECLARES all of the calls that can be made. 
         ### The eh.add_op() function MUST be called for actual execution of any of the functions. 
 
-        ### GET STATE
-        get_rule(attributes, region, prev_state)
-
         ### DELETE CALL(S)
         remove_targets_update()
         remove_targets_delete()
         delete_rule()
+
+        ### GET STATE
+        get_rule(attributes, region, prev_state)
 
         ### CREATE CALL(S) (occasionally multiple)
         create_rule(attributes, region, prev_state)
